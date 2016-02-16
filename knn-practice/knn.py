@@ -6,12 +6,12 @@ import numpy as np
 from utils import plot_features
 
 # データ読み込み
-raw_data, labels = load_dataset('aaj_data')
+raw_data, labels = load_dataset('aaj_data1000')
 # 特徴抽出
 features = extract(raw_data)
 plot_features(features)
 
-classifier = KNeighborsClassifier(n_neighbors=5)
+classifier = KNeighborsClassifier(n_neighbors=6)
 
 means = []
 # K分割交差検定
@@ -22,6 +22,5 @@ for training,testing in kf:
     # テストデータで検証する
     prediction = classifier.predict(features[testing])
     curmean = np.mean(prediction == labels[testing])
-    print(labels[testing])
     means.append(curmean)
 print('Result of cross-validation using KFold: {}'.format(means))
