@@ -42,7 +42,7 @@ def create_ngram_model(params=None):
 
     return pipeline
 
-
+# 最適パラメータを求める(時間がかかる)
 def grid_search_model(clf_factory, X, Y):
     cv = ShuffleSplit(
         n=len(X), n_iter=10, test_size=0.3, random_state=0)
@@ -60,7 +60,7 @@ def grid_search_model(clf_factory, X, Y):
     grid_search = GridSearchCV(clf_factory(),
                                param_grid=param_grid,
                                cv=cv,
-                               score_func=f1_score,
+                               scoring='f1',
                                verbose=10)
     grid_search.fit(X, Y)
     clf = grid_search.best_estimator_
@@ -68,11 +68,10 @@ def grid_search_model(clf_factory, X, Y):
 
     return clf
 
-
 def train_model(clf, X, Y, name="NB ngram", plot=False):
     # create it again for plotting
     cv = ShuffleSplit(
-        n=len(X), n_iter=10, test_size=0.3, indices=True, random_state=0)
+        n=len(X), n_iter=10, test_size=0.3, random_state=0)
 
     train_errors = []
     test_errors = []
@@ -156,26 +155,31 @@ if __name__ == "__main__":
     X = X_orig[pos_neg]
     Y = Y_orig[pos_neg]
     Y = tweak_labels(Y, ["positive"])
-    train_model(get_best_model(), X, Y, name="pos vs neg", plot=True)
+
+    best_clf = grid_search_model(create_ngram_model, X, Y)
+    train_model(best_clf, X, Y, name="pos vs neg", plot=True)
+    # train_model(get_best_model(), X, Y, name="pos vs neg", plot=True)
 
     print("== Pos/neg vs. irrelevant/neutral ==")
     X = X_orig
     Y = tweak_labels(Y_orig, ["positive", "negative"])
 
-    # best_clf = grid_search_model(create_ngram_model, X, Y, name="sent vs
-    # rest", plot=True)
-    train_model(get_best_model(), X, Y, name="pos vs neg", plot=True)
+    best_clf = grid_search_model(create_ngram_model, X, Y)
+    train_model(best_clf, X, Y, name="pos vs neg", plot=True)
+    # train_model(get_best_model(), X, Y, name="pos vs neg", plot=True)
 
     print("== Pos vs. rest ==")
     X = X_orig
     Y = tweak_labels(Y_orig, ["positive"])
-    train_model(get_best_model(), X, Y, name="pos vs rest",
-                plot=True)
+    best_clf = grid_search_model(create_ngram_model, X, Y)
+    train_model(best_clf, X, Y, name="pos vs rest", plot=True)
+    # train_model(get_best_model(), X, Y, name="pos vs rest", plot=True)
 
     print("== Neg vs. rest ==")
     X = X_orig
     Y = tweak_labels(Y_orig, ["negative"])
-    train_model(get_best_model(), X, Y, name="neg vs rest",
-                plot=True)
+    best_clf = grid_search_model(create_ngram_model, X, Y)
+    train_model(best_clf, X, Y, name="neg vs rest", plot=True)
+    # train_model(get_best_model(), X, Y, name="neg vs rest", plot=True)
 
     print("time spent:", time.time() - start_time)
