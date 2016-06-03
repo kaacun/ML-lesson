@@ -18,6 +18,7 @@ import numpy as np
 from sklearn.metrics import precision_recall_curve, roc_curve, auc
 from sklearn.cross_validation import ShuffleSplit
 from sklearn.pipeline import Pipeline
+from sklearn.grid_search import GridSearchCV
 
 from utils import plot_pr
 from utils import load_sanders_data
@@ -27,13 +28,11 @@ from utils import log_false_positives
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from sklearn.naive_bayes import MultinomialNB
-
-from utils import load_sent_word_net
-
-sent_word_net = load_sent_word_net()
+import pickle
 
 phase = "03"
 
+# 顔文字
 emo_repl = {
     # positive emoticons
     "&lt;3": " good ",
@@ -56,9 +55,12 @@ emo_repl = {
     ":-S": " bad ",
 }
 
+# 例えば、":dd"より先に":d"で置き換えられないようにするため、
+# 置き換えの順番を決める
 emo_repl_order = [k for (k_len, k) in reversed(
     sorted([(len(k), k) for k in list(emo_repl.keys())]))]
 
+# 略語
 re_repl = {
     r"\br\b": "are",
     r"\bu\b": "you",
@@ -80,10 +82,13 @@ re_repl = {
 def create_ngram_model(params=None):
     def preprocessor(tweet):
         global emoticons_replaced
+        # 文章を小文字に変換
         tweet = tweet.lower()
 
+        # 顔文字の置換
         for k in emo_repl_order:
             tweet = tweet.replace(k, emo_repl[k])
+        # 略語の置換
         for r, repl in re_repl.items():
             tweet = re.sub(r, repl, tweet)
 
@@ -92,13 +97,42 @@ def create_ngram_model(params=None):
     tfidf_ngrams = TfidfVectorizer(preprocessor=preprocessor,
                                    analyzer="word")
     clf = MultinomialNB()
-    pipeline = Pipeline([('tfidf', tfidf_ngrams), ('clf', clf)])
+    pipeline = Pipeline([('vect', tfidf_ngrams), ('clf', clf)])
 
     if params:
         pipeline.set_params(**params)
 
     return pipeline
 
+# 最適パラメータを求める(時間がかかる)
+def grid_search_model(clf_factory, X, Y):
+    cv = ShuffleSplit(
+        n=len(X), n_iter=10, test_size=0.3, random_state=0)
+
+    param_grid = dict(vect__ngram_range=[(1, 1), (1, 2), (1, 3)],
+                      vect__min_df=[1, 2],
+                      vect__stop_words=[None, "english"],
+                      vect__smooth_idf=[False, True],
+                      vect__use_idf=[False, True],
+                      vect__sublinear_tf=[False, True],
+                      vect__binary=[False, True],
+                      clf__alpha=[0, 0.01, 0.05, 0.1, 0.5, 1],
+                      )
+
+    grid_search = GridSearchCV(clf_factory(),
+                               param_grid=param_grid,
+                               cv=cv,
+                               scoring='f1',
+                               verbose=10)
+    grid_search.fit(X, Y)
+    clf = grid_search.best_estimator_
+    best_params = grid_search.best_params_
+    print(best_params)
+    # 最適パラメータを保存
+    with open('data/params/neg_rest.pickle', 'wb') as f:
+        pickle.dump(best_params, f)
+
+    return clf
 
 def train_model(clf, X, Y, name="NB ngram", plot=False):
     # create it again for plotting
@@ -167,6 +201,7 @@ def print_incorrect(clf, X, Y):
 
 
 def get_best_model():
+    # 02_tuning.pyで求めた最適パラメータを返す
     best_params = dict(tfidf__ngram_range=(1, 2),
                        tfidf__min_df=1,
                        tfidf__stop_words=None,
@@ -178,7 +213,6 @@ def get_best_model():
                        )
 
     best_clf = create_ngram_model(best_params)
-
     return best_clf
 
 if __name__ == "__main__":
@@ -192,26 +226,29 @@ if __name__ == "__main__":
     X = X_orig[pos_neg]
     Y = Y_orig[pos_neg]
     Y = tweak_labels(Y, ["positive"])
-    train_model(get_best_model(), X, Y, name="pos vs neg", plot=True)
+    best_clf = grid_search_model(create_ngram_model, X, Y)
+    train_model(best_clf, X, Y, name="pos vs neg", plot=True)
+    # train_model(get_best_model(), X, Y, name="pos vs neg", plot=True)
 
     print("== Pos/neg vs. irrelevant/neutral ==")
     X = X_orig
     Y = tweak_labels(Y_orig, ["positive", "negative"])
-
-    # best_clf = grid_search_model(create_union_model, X, Y, name="sent vs
-    # rest", plot=True)
-    train_model(get_best_model(), X, Y, name="pos+neg vs rest", plot=True)
+    best_clf = grid_search_model(create_ngram_model, X, Y)
+    train_model(best_clf, X, Y, name="pos+neg vs rest", plot=True)
+    # train_model(get_best_model(), X, Y, name="pos+neg vs rest", plot=True)
 
     print("== Pos vs. rest ==")
     X = X_orig
     Y = tweak_labels(Y_orig, ["positive"])
-    train_model(get_best_model(), X, Y, name="pos vs rest",
-                plot=True)
+    best_clf = grid_search_model(create_ngram_model, X, Y)
+    train_model(best_clf, X, Y, name="pos vs rest", plot=True)
+    # train_model(get_best_model(), X, Y, name="pos vs rest", plot=True)
 
     print("== Neg vs. rest ==")
     X = X_orig
     Y = tweak_labels(Y_orig, ["negative"])
-    train_model(get_best_model(), X, Y, name="neg vs rest",
-                plot=True)
+    best_clf = grid_search_model(create_ngram_model, X, Y)
+    train_model(best_clf, X, Y, name="neg vs neg", plot=True)
+    # train_model(get_best_model(), X, Y, name="neg vs rest", plot=True)
 
     print("time spent:", time.time() - start_time)
