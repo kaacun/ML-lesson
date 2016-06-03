@@ -179,6 +179,10 @@ def plot_bias_variance(data_sizes, train_errors, test_errors, name):
     pylab.savefig(os.path.join(CHART_DIR, "bv_" + name + ".png"))
 
 
+# SentiWordNet読み込み
+# 結果としてディクショナリを返す
+# key: 品詞の種類/単語
+# value: ポジティブスコアとネガティブスコア
 def load_sent_word_net():
 
     sent_scores = collections.defaultdict(list)
