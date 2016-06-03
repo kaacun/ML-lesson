@@ -35,6 +35,7 @@ from sklearn.naive_bayes import MultinomialNB
 
 from utils import load_sent_word_net
 
+# SentiWordNet読み込み
 sent_word_net = load_sent_word_net()
 
 phase = "04"
@@ -48,13 +49,16 @@ except IOError:
     poscache = {}
 
 
+# BestEstimatorを継承してSentiwordnetを用いたベクトル化を行う
 class LinguisticVectorizer(BaseEstimator):
 
+    # 特徴量の名前のリスト
     def get_feature_names(self):
         return np.array(['sent_neut', 'sent_pos', 'sent_neg',
                          'nouns', 'adjectives', 'verbs', 'adverbs',
                          'allcaps', 'exclamation', 'question'])
 
+    # このクラスで分類器までを実装しないため何もしない
     def fit(self, documents, y=None):
         return self
 
@@ -80,6 +84,7 @@ class LinguisticVectorizer(BaseEstimator):
         for w, t in tagged:
             p, n = 0, 0
             sent_pos_type = None
+            # 品詞タイプのカウント
             if t.startswith("NN"):
                 sent_pos_type = "n"
                 nouns += 1
@@ -97,11 +102,13 @@ class LinguisticVectorizer(BaseEstimator):
                 sent_word = "%s/%s" % (sent_pos_type, w)
 
                 if sent_word in sent_word_net:
+                    # 単語のスコアを抽出
                     p, n = sent_word_net[sent_word]
 
             pos_vals.append(p)
             neg_vals.append(n)
 
+        # スコアの平均を計算
         l = len(sent)
         avg_pos_val = np.mean(pos_vals)
         avg_neg_val = np.mean(neg_vals)
@@ -109,6 +116,7 @@ class LinguisticVectorizer(BaseEstimator):
         return [1 - avg_pos_val - avg_neg_val, avg_pos_val, avg_neg_val,
                 nouns / l, adjectives / l, verbs / l, adverbs / l]
 
+    # documents中の全てのツイートに対して、特徴量を計算
     def transform(self, documents):
         obj_val, pos_val, neg_val, nouns, adjectives, verbs, adverbs = np.array(
             [self._get_sentiments(d) for d in documents]).T
@@ -173,6 +181,7 @@ re_repl = {
 }
 
 
+# Vectorizer(Linguistic,Tfidf)とMultinomialNBを組み合わせたモデルを生成
 def create_union_model(params=None):
     def preprocessor(tweet):
         tweet = tweet.lower()
@@ -187,6 +196,7 @@ def create_union_model(params=None):
     tfidf_ngrams = TfidfVectorizer(preprocessor=preprocessor,
                                    analyzer="word")
     ling_stats = LinguisticVectorizer()
+    # Sentiwordnetとtfidfを合体
     all_features = FeatureUnion(
         [('ling', ling_stats), ('tfidf', tfidf_ngrams)])
     #all_features = FeatureUnion([('tfidf', tfidf_ngrams)])
@@ -292,6 +302,7 @@ def print_incorrect(clf, X, Y):
 
 
 def get_best_model():
+    # 02_tuning.pyで求めた最適パラメータを返す
     best_params = dict(all__tfidf__ngram_range=(1, 2),
                        all__tfidf__min_df=1,
                        all__tfidf__stop_words=None,
@@ -335,14 +346,12 @@ if __name__ == "__main__":
     print("== Pos vs. rest ==")
     X = X_orig
     Y = tweak_labels(Y_orig, ["positive"])
-    train_model(get_best_model(), X, Y, name="pos vs rest",
-                plot=True)
+    train_model(get_best_model(), X, Y, name="pos vs rest", plot=True)
 
     print("== Neg vs. rest ==")
     X = X_orig
     Y = tweak_labels(Y_orig, ["negative"])
-    train_model(get_best_model(), X, Y, name="neg vs rest",
-                plot=True)
+    train_model(get_best_model(), X, Y, name="neg vs rest", plot=True)
 
     print("time spent:", time.time() - start_time)
 
