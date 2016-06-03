@@ -27,6 +27,7 @@ from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import f1_score
 
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.externals import joblib
 
 phase = "02"
 
@@ -65,6 +66,8 @@ def grid_search_model(clf_factory, X, Y):
     grid_search.fit(X, Y)
     clf = grid_search.best_estimator_
     print(clf)
+    # 最適なモデルを保存しておく
+    joblib.dump(clf, 'data/models/neg_rest.pkl');
 
     return clf
 
@@ -181,5 +184,6 @@ if __name__ == "__main__":
     best_clf = grid_search_model(create_ngram_model, X, Y)
     train_model(best_clf, X, Y, name="neg vs rest", plot=True)
     # train_model(get_best_model(), X, Y, name="neg vs rest", plot=True)
+
 
     print("time spent:", time.time() - start_time)
